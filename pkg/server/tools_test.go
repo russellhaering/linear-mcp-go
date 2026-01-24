@@ -187,6 +187,15 @@ func TestHandlers(t *testing.T) {
 				"title": "Updated Test Issue",
 			},
 		},
+		{
+			handler: "update_issue",
+			name:    "Move to team",
+			args: map[string]interface{}{
+				"issue": ISSUE_ID,
+				"team":  TEAM_NAME,
+			},
+			write: true,
+		},
 
 		// SearchIssuesHandler test cases
 		{

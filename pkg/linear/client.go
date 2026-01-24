@@ -1406,7 +1406,7 @@ func (c *LinearClient) UpdateIssue(input UpdateIssueInput) (*Issue, error) {
 		updateInput["stateId"] = input.Status
 	}
 
-	if input.Status != "" {
+	if input.TeamID != "" {
 		updateInput["teamId"] = input.TeamID
 	}
 
