@@ -1984,7 +1984,7 @@ func (c *LinearClient) GetCommentByHash(hash string) (*Comment, error) {
 // GetTeamIssues gets issues for a team
 func (c *LinearClient) GetTeamIssues(teamID string) ([]LinearIssueResponse, error) {
 	query := `
-		query GetTeamIssues($teamId: ID!) {
+		query GetTeamIssues($teamId: String!) {
 			team(id: $teamId) {
 				issues {
 					nodes {
@@ -2057,6 +2057,182 @@ func (c *LinearClient) GetTeamIssues(teamID string) ([]LinearIssueResponse, erro
 			Title:      getStringValue(issueData, "title"),
 			URL:        getStringValue(issueData, "url"),
 			StateName:  stateName,
+		}
+
+		// Extract priority
+		if priority, ok := issueData["priority"].(float64); ok {
+			issue.Priority = int(priority)
+		}
+
+		issues = append(issues, issue)
+	}
+
+	return issues, nil
+}
+
+// GetTeamIssuesInput represents the input for getting team issues with filters
+type GetTeamIssuesInput struct {
+	TeamID          string
+	Status          string
+	AssigneeID      string
+	Labels          []string
+	Priority        *int
+	IncludeArchived bool
+	Limit           int
+}
+
+// GetTeamIssuesFiltered gets issues for a team with optional filters
+// This uses the team { issues } query which only returns issues directly assigned
+// to this team (excludes sub-team issues), unlike the root issues query with team filter.
+func (c *LinearClient) GetTeamIssuesFiltered(input GetTeamIssuesInput) ([]LinearIssueResponse, error) {
+	query := `
+		query GetTeamIssues($teamId: String!, $filter: IssueFilter, $first: Int, $includeArchived: Boolean) {
+			team(id: $teamId) {
+				issues(filter: $filter, first: $first, includeArchived: $includeArchived) {
+					nodes {
+						id
+						identifier
+						title
+						description
+						priority
+						url
+						state {
+							id
+							name
+						}
+						assignee {
+							id
+							name
+						}
+						labels {
+							nodes {
+								id
+								name
+							}
+						}
+						project {
+							id
+							name
+						}
+						projectMilestone {
+							id
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+
+	// Build the filter
+	filter := map[string]interface{}{}
+
+	if input.Status != "" {
+		filter["state"] = map[string]interface{}{
+			"name": map[string]interface{}{"eq": input.Status},
+		}
+	}
+
+	if input.AssigneeID != "" {
+		filter["assignee"] = map[string]interface{}{
+			"id": map[string]interface{}{"eq": input.AssigneeID},
+		}
+	}
+
+	if len(input.Labels) > 0 {
+		filter["labels"] = map[string]interface{}{
+			"some": map[string]interface{}{
+				"name": map[string]interface{}{"in": input.Labels},
+			},
+		}
+	}
+
+	if input.Priority != nil {
+		filter["priority"] = map[string]interface{}{"eq": *input.Priority}
+	}
+
+	// Set default limit if not provided
+	limit := 50
+	if input.Limit > 0 {
+		limit = input.Limit
+	}
+
+	variables := map[string]interface{}{
+		"teamId":          input.TeamID,
+		"first":           limit,
+		"includeArchived": input.IncludeArchived,
+	}
+
+	// Only add filter if it has values
+	if len(filter) > 0 {
+		variables["filter"] = filter
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the team from the response
+	teamData, ok := resp.Data["team"].(map[string]interface{})
+	if !ok || teamData == nil {
+		return nil, fmt.Errorf("team %s not found", input.TeamID)
+	}
+
+	// Extract the issues
+	issuesData, ok := teamData["issues"].(map[string]interface{})
+	if !ok || issuesData == nil {
+		return []LinearIssueResponse{}, nil
+	}
+
+	nodesData, ok := issuesData["nodes"].([]interface{})
+	if !ok || nodesData == nil {
+		return []LinearIssueResponse{}, nil
+	}
+
+	// Parse the issues data
+	issues := make([]LinearIssueResponse, 0, len(nodesData))
+	for _, nodeData := range nodesData {
+		issueData, ok := nodeData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Extract state name
+		var stateName string
+		if stateData, ok := issueData["state"].(map[string]interface{}); ok && stateData != nil {
+			if name, ok := stateData["name"].(string); ok {
+				stateName = name
+			}
+		}
+
+		// Extract project info
+		var project *Project
+		if projectData, ok := issueData["project"].(map[string]interface{}); ok && projectData != nil {
+			project = &Project{
+				ID:   getStringValue(projectData, "id"),
+				Name: getStringValue(projectData, "name"),
+			}
+		}
+
+		// Extract milestone info
+		var milestone *ProjectMilestone
+		if milestoneData, ok := issueData["projectMilestone"].(map[string]interface{}); ok && milestoneData != nil {
+			milestone = &ProjectMilestone{
+				ID:   getStringValue(milestoneData, "id"),
+				Name: getStringValue(milestoneData, "name"),
+			}
+		}
+
+		// Create the issue response
+		issue := LinearIssueResponse{
+			ID:               getStringValue(issueData, "id"),
+			Identifier:       getStringValue(issueData, "identifier"),
+			Title:            getStringValue(issueData, "title"),
+			URL:              getStringValue(issueData, "url"),
+			StateName:        stateName,
+			Project:          project,
+			ProjectMilestone: milestone,
 		}
 
 		// Extract priority

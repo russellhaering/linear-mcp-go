@@ -232,6 +232,44 @@ func TestHandlers(t *testing.T) {
 			},
 		},
 
+		// GetTeamIssuesHandler test cases
+		{
+			handler: "get_team_issues",
+			name:    "By UUID",
+			args: map[string]interface{}{
+				"team":  TEAM_ID,
+				"limit": float64(5),
+			},
+		},
+		{
+			handler: "get_team_issues",
+			name:    "By name",
+			args: map[string]interface{}{
+				"team":  TEAM_NAME,
+				"limit": float64(5),
+			},
+		},
+		{
+			handler: "get_team_issues",
+			name:    "By key",
+			args: map[string]interface{}{
+				"team":  TEAM_KEY,
+				"limit": float64(5),
+			},
+		},
+		{
+			handler: "get_team_issues",
+			name:    "Missing team",
+			args:    map[string]interface{}{},
+		},
+		{
+			handler: "get_team_issues",
+			name:    "Invalid team",
+			args: map[string]interface{}{
+				"team": "NonExistentTeam",
+			},
+		},
+
 		// GetIssueHandler test cases
 		{
 			handler: "get_issue",
@@ -761,6 +799,8 @@ func TestHandlers(t *testing.T) {
 				handler = tools.SearchIssuesHandler(client)
 			case "get_user_issues":
 				handler = tools.GetUserIssuesHandler(client)
+			case "get_team_issues":
+				handler = tools.GetTeamIssuesHandler(client)
 			case "get_issue":
 				handler = tools.GetIssueHandler(client)
 			case "get_issue_comments":
