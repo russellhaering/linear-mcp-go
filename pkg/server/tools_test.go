@@ -170,6 +170,110 @@ func TestHandlers(t *testing.T) {
 			},
 		},
 
+		// AddLabelHandler test cases
+		{
+			handler: "add_label",
+			name:    "Valid label by name",
+			args: map[string]interface{}{
+				"issue":  ISSUE_ID,
+				"labels": "team label 1",
+			},
+			write: true,
+		},
+		{
+			handler: "add_label",
+			name:    "Multiple labels",
+			args: map[string]interface{}{
+				"issue":  ISSUE_ID,
+				"labels": "team label 1, Feature",
+			},
+			write: true,
+		},
+		{
+			handler: "add_label",
+			name:    "Missing issue",
+			args: map[string]interface{}{
+				"labels": "team label 1",
+			},
+		},
+		{
+			handler: "add_label",
+			name:    "Missing labels",
+			args: map[string]interface{}{
+				"issue": ISSUE_ID,
+			},
+		},
+		{
+			handler: "add_label",
+			name:    "Invalid issue",
+			args: map[string]interface{}{
+				"issue":  "NONEXISTENT-123",
+				"labels": "team label 1",
+			},
+			write: true,
+		},
+		{
+			handler: "add_label",
+			name:    "Invalid label",
+			args: map[string]interface{}{
+				"issue":  ISSUE_ID,
+				"labels": "nonexistent-label",
+			},
+			write: true,
+		},
+
+		// RemoveLabelHandler test cases
+		{
+			handler: "remove_label",
+			name:    "Valid label by name",
+			args: map[string]interface{}{
+				"issue":  ISSUE_ID,
+				"labels": "team label 1",
+			},
+			write: true,
+		},
+		{
+			handler: "remove_label",
+			name:    "Multiple labels",
+			args: map[string]interface{}{
+				"issue":  ISSUE_ID,
+				"labels": "team label 1, Feature",
+			},
+			write: true,
+		},
+		{
+			handler: "remove_label",
+			name:    "Missing issue",
+			args: map[string]interface{}{
+				"labels": "team label 1",
+			},
+		},
+		{
+			handler: "remove_label",
+			name:    "Missing labels",
+			args: map[string]interface{}{
+				"issue": ISSUE_ID,
+			},
+		},
+		{
+			handler: "remove_label",
+			name:    "Invalid issue",
+			args: map[string]interface{}{
+				"issue":  "NONEXISTENT-123",
+				"labels": "team label 1",
+			},
+			write: true,
+		},
+		{
+			handler: "remove_label",
+			name:    "Invalid label",
+			args: map[string]interface{}{
+				"issue":  ISSUE_ID,
+				"labels": "nonexistent-label",
+			},
+			write: true,
+		},
+
 		// UpdateIssueHandler test cases
 		{
 			handler: "update_issue",
@@ -795,6 +899,10 @@ func TestHandlers(t *testing.T) {
 				handler = tools.CreateIssueHandler(client)
 			case "update_issue":
 				handler = tools.UpdateIssueHandler(client)
+			case "add_label":
+				handler = tools.AddLabelHandler(client)
+			case "remove_label":
+				handler = tools.RemoveLabelHandler(client)
 			case "search_issues":
 				handler = tools.SearchIssuesHandler(client)
 			case "get_user_issues":

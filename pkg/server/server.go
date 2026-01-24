@@ -121,6 +121,8 @@ func RegisterTools(s *mcpserver.MCPServer, linearClient *linear.LinearClient, wr
 	addTool(tools.UpdateInitiativeTool, tools.UpdateInitiativeHandler(linearClient))
 	addTool(tools.CreateIssueTool, tools.CreateIssueHandler(linearClient))
 	addTool(tools.UpdateIssueTool, tools.UpdateIssueHandler(linearClient))
+	addTool(tools.AddLabelTool, tools.AddLabelHandler(linearClient))
+	addTool(tools.RemoveLabelTool, tools.RemoveLabelHandler(linearClient))
 	addTool(tools.AddCommentTool, tools.AddCommentHandler(linearClient))
 	addTool(tools.ReplyToCommentTool, tools.ReplyToCommentHandler(linearClient))
 	addTool(tools.UpdateCommentTool, tools.UpdateCommentHandler(linearClient))

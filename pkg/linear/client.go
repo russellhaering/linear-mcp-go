@@ -1458,6 +1458,83 @@ func (c *LinearClient) UpdateIssue(input UpdateIssueInput) (*Issue, error) {
 	return &issue, nil
 }
 
+// AddLabelToIssue adds labels to an existing issue by updating its labelIds
+func (c *LinearClient) AddLabelToIssue(issueID string, labelIDs []string) (*Issue, error) {
+	query := `
+		mutation UpdateIssueLabels($id: String!, $input: IssueUpdateInput!) {
+			issueUpdate(id: $id, input: $input) {
+				success
+				issue {
+					id
+					identifier
+					title
+					description
+					priority
+					url
+					createdAt
+					updatedAt
+					state {
+						id
+						name
+					}
+					team {
+						id
+						name
+						key
+					}
+					labels {
+						nodes {
+							id
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+
+	variables := map[string]interface{}{
+		"id": issueID,
+		"input": map[string]interface{}{
+			"labelIds": labelIDs,
+		},
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the issue from the response
+	issueUpdateData, ok := resp.Data["issueUpdate"].(map[string]interface{})
+	if !ok || issueUpdateData == nil {
+		return nil, errors.New("failed to update issue labels")
+	}
+
+	success, ok := issueUpdateData["success"].(bool)
+	if !ok || !success {
+		return nil, errors.New("failed to update issue labels")
+	}
+
+	issueData, ok := issueUpdateData["issue"].(map[string]interface{})
+	if !ok || issueData == nil {
+		return nil, errors.New("failed to update issue labels")
+	}
+
+	// Parse the issue data
+	var issue Issue
+	issueBytes, err := json.Marshal(issueData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal issue data: %w", err)
+	}
+
+	if err := json.Unmarshal(issueBytes, &issue); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal issue data: %w", err)
+	}
+
+	return &issue, nil
+}
+
 // SearchIssues searches for issues with filters
 func (c *LinearClient) SearchIssues(input SearchIssuesInput) ([]LinearIssueResponse, error) {
 	query := `
