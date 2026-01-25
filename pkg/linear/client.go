@@ -146,6 +146,12 @@ func (c *LinearClient) GetIssue(issueID string) (*Issue, error) {
 					id
 					name
 				}
+				labels {
+					nodes {
+						id
+						name
+					}
+				}
 				relations(first: 20) {
 					nodes {
 						id
