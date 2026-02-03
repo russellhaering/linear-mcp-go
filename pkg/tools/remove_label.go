@@ -74,7 +74,7 @@ func RemoveLabelHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 		}
 
 		// Filter out the labels to remove from current labels
-		var remainingLabelIDs []string
+		remainingLabelIDs := []string{} // Initialize as empty slice, not nil
 		if issue.Labels != nil {
 			for _, label := range issue.Labels.Nodes {
 				if !removeSet[label.ID] {

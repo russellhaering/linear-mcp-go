@@ -181,6 +181,14 @@ func FormatProject(project linear.Project) string {
 	} else {
 		builder.WriteString(fmt.Sprintf("  Lead: %s\n", project.Lead.Name))
 	}
+	if project.Teams != nil && len(project.Teams.Nodes) > 0 {
+		builder.WriteString("  Teams:\n")
+		for _, t := range project.Teams.Nodes {
+			builder.WriteString(fmt.Sprintf("    - %s (%s)\n", t.Name, t.Key))
+		}
+	} else {
+		builder.WriteString("  Teams: None\n")
+	}
 	if project.StartDate == nil {
 		builder.WriteString("  Start Date: None\n")
 	} else {

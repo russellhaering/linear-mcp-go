@@ -82,10 +82,13 @@ func GetReadOnlyToolNames() map[string]bool {
 		"linear_get_issue":           true,
 		"linear_get_issue_comments":  true,
 		"linear_get_teams":           true,
+		"linear_get_projects":        true,
 		"linear_get_project":         true,
 		"linear_search_projects":     true,
 		"linear_get_milestone":       true,
 		"linear_get_initiative":      true,
+		"linear_graphql_query":       true,
+		"linear_introspect_schema":   true,
 	}
 }
 
@@ -109,6 +112,7 @@ func RegisterTools(s *mcpserver.MCPServer, linearClient *linear.LinearClient, wr
 	addTool(tools.GetIssueTool, tools.GetIssueHandler(linearClient))
 	addTool(tools.GetIssueCommentsTool, tools.GetIssueCommentsHandler(linearClient))
 	addTool(tools.GetTeamsTool, tools.GetTeamsHandler(linearClient))
+	addTool(tools.GetProjectsTool, tools.GetProjectsHandler(linearClient))
 	addTool(tools.GetProjectTool, tools.GetProjectHandler(linearClient))
 	addTool(tools.SearchProjectsTool, tools.SearchProjectsHandler(linearClient))
 	addTool(tools.CreateProjectTool, tools.CreateProjectHandler(linearClient))
@@ -126,4 +130,6 @@ func RegisterTools(s *mcpserver.MCPServer, linearClient *linear.LinearClient, wr
 	addTool(tools.AddCommentTool, tools.AddCommentHandler(linearClient))
 	addTool(tools.ReplyToCommentTool, tools.ReplyToCommentHandler(linearClient))
 	addTool(tools.UpdateCommentTool, tools.UpdateCommentHandler(linearClient))
+	addTool(tools.GraphQLQueryTool, tools.GraphQLQueryHandler(linearClient))
+	addTool(tools.IntrospectSchemaTool, tools.IntrospectSchemaHandler(linearClient))
 }

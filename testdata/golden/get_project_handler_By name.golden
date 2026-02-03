@@ -6,6 +6,8 @@ output: |
       URL: https://linear.app/linear-mcp-go-test/project/mcp-tool-investigation-ae44897e42a7
       Description: Summary text goes here
       Lead: Gero Leinemann
+      Teams:
+        - Test Team (TEST)
       Start Date: 2025-06-02
       Target Date: 2025-06-30
       Initiatives:

@@ -6,6 +6,7 @@ output: |+
       URL: https://linear.app/linear-mcp-go-test/project/totally-different-mcp-project-with-no-content-29129640a673
       Description: Summary goes here
       Lead: None
+      Teams: None
       Start Date: None
       Target Date: None
       Initiatives: None
@@ -16,6 +17,7 @@ output: |+
       URL: https://linear.app/linear-mcp-go-test/project/mcp-tool-investigation-ae44897e42a7
       Description: Summary text goes here
       Lead: Gero Leinemann
+      Teams: None
       Start Date: 2025-06-02
       Target Date: 2025-06-30
       Initiatives:

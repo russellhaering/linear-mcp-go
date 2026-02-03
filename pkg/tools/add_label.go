@@ -85,7 +85,7 @@ func AddLabelHandler(linearClient *linear.LinearClient) func(ctx context.Context
 		}
 
 		// Convert set back to slice
-		var allLabelIDs []string
+		allLabelIDs := make([]string, 0, len(labelIDSet))
 		for id := range labelIDSet {
 			allLabelIDs = append(allLabelIDs, id)
 		}

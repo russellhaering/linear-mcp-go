@@ -404,6 +404,105 @@ func (c *LinearClient) getProjectByNameOrSlug(identifier string) (*Project, erro
 	return &project, nil
 }
 
+// GetProjects gets projects with optional team filter
+func (c *LinearClient) GetProjects(input GetProjectsInput) ([]Project, error) {
+	query := `
+		query GetProjects($filter: ProjectFilter, $first: Int) {
+			projects(filter: $filter, first: $first) {
+				nodes {
+					id
+					name
+					description
+					slugId
+					state
+					url
+					initiatives(first: 10) {
+						nodes {
+							id
+							name
+						}
+					}
+					lead {
+						id
+						name
+					}
+					teams {
+						nodes {
+							id
+							name
+							key
+						}
+					}
+					startDate
+					targetDate
+				}
+			}
+		}
+	`
+
+	// Build the filter
+	filter := map[string]interface{}{}
+
+	if input.TeamID != "" {
+		filter["accessibleTeams"] = map[string]interface{}{
+			"some": map[string]interface{}{
+				"id": map[string]interface{}{"eq": input.TeamID},
+			},
+		}
+	}
+
+	// Set default limit if not provided
+	limit := 50
+	if input.Limit > 0 {
+		limit = input.Limit
+	}
+
+	variables := map[string]interface{}{
+		"first": limit,
+	}
+
+	// Only add filter if it has values
+	if len(filter) > 0 {
+		variables["filter"] = filter
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	projectsData, ok := resp.Data["projects"].(map[string]interface{})
+	if !ok || projectsData == nil {
+		return []Project{}, nil
+	}
+
+	nodes, ok := projectsData["nodes"].([]interface{})
+	if !ok {
+		return []Project{}, nil
+	}
+
+	var projects []Project
+	for _, node := range nodes {
+		projectData, ok := node.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		var project Project
+		projectBytes, err := json.Marshal(projectData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal project data: %w", err)
+		}
+
+		if err := json.Unmarshal(projectBytes, &project); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal project data: %w", err)
+		}
+		projects = append(projects, project)
+	}
+
+	return projects, nil
+}
+
 // SearchProjects searches for projects
 func (c *LinearClient) SearchProjects(query string) ([]Project, error) {
 	graphqlQuery := `
@@ -2672,6 +2771,16 @@ func (c *LinearClient) GetTeams(name string) ([]Team, error) {
 	}
 
 	return teams, nil
+}
+
+// ExecuteRawQuery executes an arbitrary GraphQL query and returns the raw response data.
+// This is useful for queries that don't have dedicated methods.
+func (c *LinearClient) ExecuteRawQuery(query string, variables map[string]interface{}) (map[string]interface{}, error) {
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
 }
 
 // GetMetrics returns metrics about the API usage

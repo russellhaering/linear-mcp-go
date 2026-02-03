@@ -51,13 +51,18 @@ type Project struct {
 	Creator     *User  `json:"creator,omitempty"`
 	Lead        *User  `json:"lead,omitempty"`
 	// Members     *UserConnection `json:"members,omitempty"`
-	// Teams       *TeamConnection `json:"teams,omitempty"`
+	Teams       *TeamConnection       `json:"teams,omitempty"`
 	Initiatives *InitiativeConnection `json:"initiatives,omitempty"`
 	StartDate   *string               `json:"startDate,omitempty"`
 	TargetDate  *string               `json:"targetDate,omitempty"`
 	Color       string                `json:"color"`
 	Icon        string                `json:"icon,omitempty"`
 	URL         string                `json:"url"`
+}
+
+// TeamConnection represents a connection of teams
+type TeamConnection struct {
+	Nodes []Team `json:"nodes"`
 }
 
 // ProjectConnection represents a connection of projects
@@ -314,6 +319,12 @@ type InitiativeCreateInput struct {
 type InitiativeUpdateInput struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
+}
+
+// GetProjectsInput represents input for getting projects
+type GetProjectsInput struct {
+	TeamID string `json:"teamId,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
 }
 
 // GraphQLRequest represents a GraphQL request

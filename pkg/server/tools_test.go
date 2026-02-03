@@ -874,6 +874,46 @@ func TestHandlers(t *testing.T) {
 			},
 			write: true,
 		},
+		// GraphQLQueryHandler test cases
+		// Note: To add tests that make actual API calls (e.g., "Valid query"),
+		// run with -record=true and LINEAR_API_KEY set to create fixtures.
+		{
+			handler: "graphql_query",
+			name:    "Reject mutation",
+			args: map[string]interface{}{
+				"query": "mutation { issueCreate(input: {title: \"test\", teamId: \"123\"}) { success } }",
+			},
+		},
+		{
+			handler: "graphql_query",
+			name:    "Reject mutation with leading whitespace",
+			args: map[string]interface{}{
+				"query": "  mutation { issueCreate(input: {title: \"test\", teamId: \"123\"}) { success } }",
+			},
+		},
+		{
+			handler: "graphql_query",
+			name:    "Reject subscription",
+			args: map[string]interface{}{
+				"query": "subscription { issueCreated { id } }",
+			},
+		},
+		{
+			handler: "graphql_query",
+			name:    "Missing query",
+			args:    map[string]interface{}{},
+		},
+		{
+			handler: "graphql_query",
+			name:    "Invalid variables JSON",
+			args: map[string]interface{}{
+				"query":     "{ viewer { id } }",
+				"variables": "not-valid-json",
+			},
+		},
+		// IntrospectSchemaHandler test cases
+		// Note: To add tests that make actual API calls (e.g., "Full schema", "Specific type"),
+		// run with -record=true and LINEAR_API_KEY set to create fixtures.
 	}
 
 	for _, tt := range tests {
@@ -939,6 +979,10 @@ func TestHandlers(t *testing.T) {
 				handler = tools.CreateInitiativeHandler(client)
 			case "update_initiative":
 				handler = tools.UpdateInitiativeHandler(client)
+			case "graphql_query":
+				handler = tools.GraphQLQueryHandler(client)
+			case "introspect_schema":
+				handler = tools.IntrospectSchemaHandler(client)
 			default:
 				t.Fatalf("Unknown handler type: %s", tt.handler)
 			}

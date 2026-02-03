@@ -1,0 +1,2 @@
+err: Only read-only queries are allowed. Mutations and subscriptions are not permitted.
+output: ""
