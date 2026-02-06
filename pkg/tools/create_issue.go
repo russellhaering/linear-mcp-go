@@ -17,6 +17,7 @@ var CreateIssueTool = mcp.NewTool("linear_create_issue",
 	mcp.WithString("description", mcp.Description("Issue description")),
 	mcp.WithString("priority", getPriorityOptions()...),
 	mcp.WithString("status", mcp.Description("Issue status")),
+	mcp.WithString("assignee", mcp.Description("Assignee identifier (UUID, name, or email)")),
 	mcp.WithString("makeSubissueOf", mcp.Description("Makes this issue a sub-issue of the specified parent. Accepts issue ID (UUID) or identifier (e.g., 'TEAM-123'). Creates a parent-child relationship in Linear.")),
 	mcp.WithString("labels", mcp.Description("Optional comma-separated list of label IDs or names to assign")),
 	mcp.WithString("project", mcp.Description("Optional project identifier (ID, name, or slug) to assign the issue to")),
@@ -98,6 +99,16 @@ func CreateIssueHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 			projectID = resolvedProjectID
 		}
 
+		// Extract assignee parameter and resolve it if needed
+		var assigneeID string
+		if assignee, err := request.RequireString("assignee"); err == nil && assignee != "" {
+			resolvedAssigneeID, err := resolveUserIdentifier(linearClient, assignee)
+			if err != nil {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve assignee: %v", err)}}}, nil
+			}
+			assigneeID = resolvedAssigneeID
+		}
+
 		// Create the issue
 		input := linear.CreateIssueInput{
 			Title:       title,
@@ -108,6 +119,7 @@ func CreateIssueHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 			ParentID:    parentID,
 			LabelIDs:    labelIDs,
 			ProjectID:   projectID,
+			AssigneeID:  assigneeID,
 		}
 
 		issue, err := linearClient.CreateIssue(input)

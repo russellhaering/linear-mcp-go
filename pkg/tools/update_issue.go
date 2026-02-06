@@ -16,6 +16,7 @@ var UpdateIssueTool = mcp.NewTool("linear_update_issue",
 	mcp.WithString("description", mcp.Description("New description")),
 	mcp.WithString("priority", getPriorityOptions()...),
 	mcp.WithString("status", mcp.Description("New status")),
+	mcp.WithString("assignee", mcp.Description("New assignee (UUID, name, or email)")),
 	mcp.WithString("team", mcp.Description("New team (UUID, name, or key)")),
 	mcp.WithString("projectId", mcp.Description("New project ID")),
 	mcp.WithString("milestoneId", mcp.Description("New milestone ID")),
@@ -64,6 +65,16 @@ func UpdateIssueHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 		projectID := request.GetString("projectId", "")
 		milestoneID := request.GetString("milestoneId", "")
 
+		// Resolve assignee identifier to a user ID
+		var assigneeID string
+		assignee := request.GetString("assignee", "")
+		if assignee != "" {
+			assigneeID, err = resolveUserIdentifier(linearClient, assignee)
+			if err != nil {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve assignee: %v", err)}}}, nil
+			}
+		}
+
 		// Update the issue
 		input := linear.UpdateIssueInput{
 			ID:          id,
@@ -74,6 +85,7 @@ func UpdateIssueHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 			TeamID:      teamID,
 			ProjectID:   projectID,
 			MilestoneID: milestoneID,
+			AssigneeID:  assigneeID,
 		}
 
 		issue, err := linearClient.UpdateIssue(input)
