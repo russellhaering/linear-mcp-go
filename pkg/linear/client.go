@@ -1428,6 +1428,10 @@ func (c *LinearClient) CreateIssue(input CreateIssueInput) (*Issue, error) {
 		variables["input"].(map[string]interface{})["projectId"] = input.ProjectID
 	}
 
+	if input.AssigneeID != "" {
+		variables["input"].(map[string]interface{})["assigneeId"] = input.AssigneeID
+	}
+
 	resp, err := c.executeGraphQL(query, variables)
 	if err != nil {
 		return nil, err
@@ -1521,6 +1525,10 @@ func (c *LinearClient) UpdateIssue(input UpdateIssueInput) (*Issue, error) {
 
 	if input.MilestoneID != "" {
 		updateInput["milestoneId"] = input.MilestoneID
+	}
+
+	if input.AssigneeID != "" {
+		updateInput["assigneeId"] = input.AssigneeID
 	}
 
 	variables := map[string]interface{}{
@@ -2802,4 +2810,588 @@ func getStringValue(data map[string]interface{}, key string) string {
 		return value
 	}
 	return ""
+}
+
+// GetCustomers gets customers with optional filters
+func (c *LinearClient) GetCustomers(limit int) ([]Customer, error) {
+	query := `
+		query GetCustomers($first: Int) {
+			customers(first: $first) {
+				nodes {
+					id
+					name
+					slugId
+					logoUrl
+					domains
+					revenue
+					size
+					url
+					tier {
+						id
+						name
+						displayName
+						color
+					}
+					status {
+						id
+						name
+						displayName
+						color
+					}
+					owner {
+						id
+						name
+						email
+					}
+				}
+			}
+		}
+	`
+
+	// Set default limit if not provided
+	if limit <= 0 {
+		limit = 50
+	}
+
+	variables := map[string]interface{}{
+		"first": limit,
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customersData, ok := resp.Data["customers"].(map[string]interface{})
+	if !ok || customersData == nil {
+		return []Customer{}, nil
+	}
+
+	nodes, ok := customersData["nodes"].([]interface{})
+	if !ok {
+		return []Customer{}, nil
+	}
+
+	var customers []Customer
+	for _, node := range nodes {
+		customerData, ok := node.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		var customer Customer
+		customerBytes, err := json.Marshal(customerData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal customer data: %w", err)
+		}
+
+		if err := json.Unmarshal(customerBytes, &customer); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal customer data: %w", err)
+		}
+		customers = append(customers, customer)
+	}
+
+	return customers, nil
+}
+
+// GetCustomer gets a customer by identifier (ID, name, or domain)
+func (c *LinearClient) GetCustomer(identifier string) (*Customer, error) {
+	// First, try to get by ID
+	customer, err := c.getCustomerByID(identifier)
+	if err == nil {
+		return customer, nil
+	}
+
+	// If not found by ID, try to get by name or domain
+	return c.getCustomerByNameOrDomain(identifier)
+}
+
+// getCustomerByID gets a customer by its UUID
+func (c *LinearClient) getCustomerByID(id string) (*Customer, error) {
+	query := `
+		query GetCustomer($id: String!) {
+			customer(id: $id) {
+				id
+				name
+				slugId
+				logoUrl
+				domains
+				revenue
+				size
+				url
+				tier {
+					id
+					name
+					displayName
+					color
+				}
+				status {
+					id
+					name
+					displayName
+					color
+				}
+				owner {
+					id
+					name
+					email
+				}
+			}
+		}
+	`
+
+	variables := map[string]interface{}{
+		"id": id,
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customerData, ok := resp.Data["customer"].(map[string]interface{})
+	if !ok || customerData == nil {
+		return nil, fmt.Errorf("customer with ID %s not found", id)
+	}
+
+	var customer Customer
+	customerBytes, err := json.Marshal(customerData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal customer data: %w", err)
+	}
+
+	if err := json.Unmarshal(customerBytes, &customer); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal customer data: %w", err)
+	}
+
+	return &customer, nil
+}
+
+// getCustomerByNameOrDomain gets a customer by name or domain.
+// It tries multiple search strategies in order:
+// 1. Exact name match (case-insensitive)
+// 2. Exact domain match (case-insensitive)
+// 3. Contains name match (fuzzy, case-insensitive)
+// If no customer is found, it suggests similar customer names.
+func (c *LinearClient) getCustomerByNameOrDomain(identifier string) (*Customer, error) {
+	query := `
+		query GetCustomerByNameOrDomain($filter: CustomerFilter, $first: Int) {
+			customers(filter: $filter, first: $first) {
+				nodes {
+					id
+					name
+					slugId
+					logoUrl
+					domains
+					revenue
+					size
+					url
+					tier {
+						id
+						name
+						displayName
+						color
+					}
+					status {
+						id
+						name
+						displayName
+						color
+					}
+					owner {
+						id
+						name
+						email
+					}
+				}
+			}
+		}
+	`
+
+	// Strategy 1: Try exact name match first (case-insensitive)
+	exactNameFilter := map[string]interface{}{
+		"name": map[string]interface{}{"eqIgnoreCase": identifier},
+	}
+
+	variables := map[string]interface{}{
+		"filter": exactNameFilter,
+		"first":  1,
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customer, found := c.extractCustomerFromResponse(resp)
+	if found {
+		return customer, nil
+	}
+
+	// Strategy 2: Try exact domain match (case-insensitive)
+	domainFilter := map[string]interface{}{
+		"domains": map[string]interface{}{
+			"some": map[string]interface{}{"eqIgnoreCase": identifier},
+		},
+	}
+
+	variables["filter"] = domainFilter
+
+	resp, err = c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customer, found = c.extractCustomerFromResponse(resp)
+	if found {
+		return customer, nil
+	}
+
+	// Strategy 3: Try fuzzy name match (contains, case-insensitive)
+	fuzzyNameFilter := map[string]interface{}{
+		"name": map[string]interface{}{"containsIgnoreCase": identifier},
+	}
+
+	variables["filter"] = fuzzyNameFilter
+
+	resp, err = c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customer, found = c.extractCustomerFromResponse(resp)
+	if found {
+		return customer, nil
+	}
+
+	// No customer found - try to get similar names to suggest
+	similarNames, _ := c.getSimilarCustomerNames(identifier)
+	if len(similarNames) > 0 {
+		return nil, fmt.Errorf("customer '%s' not found. Did you mean: %s?", identifier, strings.Join(similarNames, ", "))
+	}
+
+	return nil, fmt.Errorf("customer '%s' not found", identifier)
+}
+
+// extractCustomerFromResponse extracts a customer from a GraphQL response
+func (c *LinearClient) extractCustomerFromResponse(resp *GraphQLResponse) (*Customer, bool) {
+	customersData, ok := resp.Data["customers"].(map[string]interface{})
+	if !ok || customersData == nil {
+		return nil, false
+	}
+
+	nodes, ok := customersData["nodes"].([]interface{})
+	if !ok || len(nodes) == 0 {
+		return nil, false
+	}
+
+	customerData, ok := nodes[0].(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	var customer Customer
+	customerBytes, err := json.Marshal(customerData)
+	if err != nil {
+		return nil, false
+	}
+
+	if err := json.Unmarshal(customerBytes, &customer); err != nil {
+		return nil, false
+	}
+
+	return &customer, true
+}
+
+// getSimilarCustomerNames finds customer names similar to the given identifier
+func (c *LinearClient) getSimilarCustomerNames(identifier string) ([]string, error) {
+	query := `
+		query GetSimilarCustomers($filter: CustomerFilter) {
+			customers(filter: $filter, first: 5) {
+				nodes {
+					name
+				}
+			}
+		}
+	`
+
+	// Search for customers whose names contain parts of the identifier
+	filter := map[string]interface{}{
+		"name": map[string]interface{}{"containsIgnoreCase": identifier[:min(len(identifier), 3)]},
+	}
+
+	variables := map[string]interface{}{
+		"filter": filter,
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customersData, ok := resp.Data["customers"].(map[string]interface{})
+	if !ok || customersData == nil {
+		return nil, nil
+	}
+
+	nodes, ok := customersData["nodes"].([]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	var names []string
+	identifierLower := strings.ToLower(identifier)
+	for _, node := range nodes {
+		customerData, ok := node.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name := getStringValue(customerData, "name")
+		if name != "" && strings.ToLower(name) != identifierLower {
+			names = append(names, name)
+		}
+	}
+
+	return names, nil
+}
+
+// GetCustomerTiers gets all customer tiers
+func (c *LinearClient) GetCustomerTiers() ([]CustomerTier, error) {
+	query := `
+		query GetCustomerTiers {
+			customerTiers {
+				nodes {
+					id
+					name
+					displayName
+					description
+					color
+					position
+				}
+			}
+		}
+	`
+
+	resp, err := c.executeGraphQL(query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tiersData, ok := resp.Data["customerTiers"].(map[string]interface{})
+	if !ok || tiersData == nil {
+		return []CustomerTier{}, nil
+	}
+
+	nodes, ok := tiersData["nodes"].([]interface{})
+	if !ok {
+		return []CustomerTier{}, nil
+	}
+
+	var tiers []CustomerTier
+	for _, node := range nodes {
+		tierData, ok := node.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		var tier CustomerTier
+		tierBytes, err := json.Marshal(tierData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal tier data: %w", err)
+		}
+
+		if err := json.Unmarshal(tierBytes, &tier); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal tier data: %w", err)
+		}
+		tiers = append(tiers, tier)
+	}
+
+	return tiers, nil
+}
+
+// GetCustomerTierByName gets a customer tier by name
+func (c *LinearClient) GetCustomerTierByName(name string) (*CustomerTier, error) {
+	tiers, err := c.GetCustomerTiers()
+	if err != nil {
+		return nil, err
+	}
+
+	// First try exact match
+	for _, tier := range tiers {
+		if tier.Name == name || tier.DisplayName == name {
+			return &tier, nil
+		}
+	}
+
+	// Then try case-insensitive match
+	nameLower := strings.ToLower(name)
+	for _, tier := range tiers {
+		if strings.ToLower(tier.Name) == nameLower || strings.ToLower(tier.DisplayName) == nameLower {
+			return &tier, nil
+		}
+	}
+
+	return nil, fmt.Errorf("customer tier '%s' not found", name)
+}
+
+// GetCustomerStatuses gets all customer statuses
+func (c *LinearClient) GetCustomerStatuses() ([]CustomerStatus, error) {
+	query := `
+		query GetCustomerStatuses {
+			customerStatuses {
+				nodes {
+					id
+					name
+					displayName
+					description
+					color
+					position
+				}
+			}
+		}
+	`
+
+	resp, err := c.executeGraphQL(query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	statusesData, ok := resp.Data["customerStatuses"].(map[string]interface{})
+	if !ok || statusesData == nil {
+		return []CustomerStatus{}, nil
+	}
+
+	nodes, ok := statusesData["nodes"].([]interface{})
+	if !ok {
+		return []CustomerStatus{}, nil
+	}
+
+	var statuses []CustomerStatus
+	for _, node := range nodes {
+		statusData, ok := node.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		var status CustomerStatus
+		statusBytes, err := json.Marshal(statusData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal status data: %w", err)
+		}
+
+		if err := json.Unmarshal(statusBytes, &status); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal status data: %w", err)
+		}
+		statuses = append(statuses, status)
+	}
+
+	return statuses, nil
+}
+
+// GetCustomerStatusByName gets a customer status by name
+func (c *LinearClient) GetCustomerStatusByName(name string) (*CustomerStatus, error) {
+	statuses, err := c.GetCustomerStatuses()
+	if err != nil {
+		return nil, err
+	}
+
+	// First try exact match
+	for _, status := range statuses {
+		if status.Name == name || status.DisplayName == name {
+			return &status, nil
+		}
+	}
+
+	// Then try case-insensitive match
+	nameLower := strings.ToLower(name)
+	for _, status := range statuses {
+		if strings.ToLower(status.Name) == nameLower || strings.ToLower(status.DisplayName) == nameLower {
+			return &status, nil
+		}
+	}
+
+	return nil, fmt.Errorf("customer status '%s' not found", name)
+}
+
+// UpdateCustomer updates a customer
+func (c *LinearClient) UpdateCustomer(id string, tierId *string, statusId *string) (*Customer, error) {
+	query := `
+		mutation CustomerUpdate($id: String!, $input: CustomerUpdateInput!) {
+			customerUpdate(id: $id, input: $input) {
+				success
+				customer {
+					id
+					name
+					slugId
+					logoUrl
+					domains
+					revenue
+					size
+					url
+					tier {
+						id
+						name
+						displayName
+						color
+					}
+					status {
+						id
+						name
+						displayName
+						color
+					}
+					owner {
+						id
+						name
+						email
+					}
+				}
+			}
+		}
+	`
+
+	input := map[string]interface{}{}
+	if tierId != nil {
+		input["tierId"] = *tierId
+	}
+	if statusId != nil {
+		input["statusId"] = *statusId
+	}
+
+	variables := map[string]interface{}{
+		"id":    id,
+		"input": input,
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customerUpdateData, ok := resp.Data["customerUpdate"].(map[string]interface{})
+	if !ok || customerUpdateData == nil {
+		return nil, errors.New("failed to update customer")
+	}
+
+	success, ok := customerUpdateData["success"].(bool)
+	if !ok || !success {
+		return nil, errors.New("failed to update customer")
+	}
+
+	customerData, ok := customerUpdateData["customer"].(map[string]interface{})
+	if !ok || customerData == nil {
+		return nil, errors.New("failed to update customer")
+	}
+
+	var customer Customer
+	customerBytes, err := json.Marshal(customerData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal customer data: %w", err)
+	}
+
+	if err := json.Unmarshal(customerBytes, &customer); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal customer data: %w", err)
+	}
+
+	return &customer, nil
 }
