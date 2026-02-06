@@ -2823,6 +2823,7 @@ func (c *LinearClient) GetCustomers(limit int) ([]Customer, error) {
 					slugId
 					logoUrl
 					domains
+					externalIds
 					revenue
 					size
 					url
@@ -2916,6 +2917,7 @@ func (c *LinearClient) getCustomerByID(id string) (*Customer, error) {
 				slugId
 				logoUrl
 				domains
+				externalIds
 				revenue
 				size
 				url
@@ -2983,6 +2985,7 @@ func (c *LinearClient) getCustomerByNameOrDomain(identifier string) (*Customer, 
 					slugId
 					logoUrl
 					domains
+					externalIds
 					revenue
 					size
 					url
@@ -3325,6 +3328,7 @@ func (c *LinearClient) UpdateCustomer(id string, tierId *string, statusId *strin
 					slugId
 					logoUrl
 					domains
+					externalIds
 					revenue
 					size
 					url
@@ -3381,6 +3385,86 @@ func (c *LinearClient) UpdateCustomer(id string, tierId *string, statusId *strin
 	customerData, ok := customerUpdateData["customer"].(map[string]interface{})
 	if !ok || customerData == nil {
 		return nil, errors.New("failed to update customer")
+	}
+
+	var customer Customer
+	customerBytes, err := json.Marshal(customerData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal customer data: %w", err)
+	}
+
+	if err := json.Unmarshal(customerBytes, &customer); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal customer data: %w", err)
+	}
+
+	return &customer, nil
+}
+
+// UpdateCustomerExternalIds updates a customer's external IDs
+func (c *LinearClient) UpdateCustomerExternalIds(id string, externalIds []string) (*Customer, error) {
+	query := `
+		mutation CustomerUpdate($id: String!, $input: CustomerUpdateInput!) {
+			customerUpdate(id: $id, input: $input) {
+				success
+				customer {
+					id
+					name
+					slugId
+					logoUrl
+					domains
+					externalIds
+					revenue
+					size
+					url
+					tier {
+						id
+						name
+						displayName
+						color
+					}
+					status {
+						id
+						name
+						displayName
+						color
+					}
+					owner {
+						id
+						name
+						email
+					}
+				}
+			}
+		}
+	`
+
+	input := map[string]interface{}{
+		"externalIds": externalIds,
+	}
+
+	variables := map[string]interface{}{
+		"id":    id,
+		"input": input,
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	customerUpdateData, ok := resp.Data["customerUpdate"].(map[string]interface{})
+	if !ok || customerUpdateData == nil {
+		return nil, errors.New("failed to update customer external IDs")
+	}
+
+	success, ok := customerUpdateData["success"].(bool)
+	if !ok || !success {
+		return nil, errors.New("failed to update customer external IDs")
+	}
+
+	customerData, ok := customerUpdateData["customer"].(map[string]interface{})
+	if !ok || customerData == nil {
+		return nil, errors.New("failed to update customer external IDs")
 	}
 
 	var customer Customer

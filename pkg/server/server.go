@@ -89,6 +89,9 @@ func GetReadOnlyToolNames() map[string]bool {
 		"linear_get_initiative":      true,
 		"linear_graphql_query":       true,
 		"linear_introspect_schema":   true,
+		"linear_get_customers":       true,
+		"linear_get_customer":        true,
+		"linear_get_customer_tiers":  true,
 	}
 }
 
@@ -132,4 +135,13 @@ func RegisterTools(s *mcpserver.MCPServer, linearClient *linear.LinearClient, wr
 	addTool(tools.UpdateCommentTool, tools.UpdateCommentHandler(linearClient))
 	addTool(tools.GraphQLQueryTool, tools.GraphQLQueryHandler(linearClient))
 	addTool(tools.IntrospectSchemaTool, tools.IntrospectSchemaHandler(linearClient))
+
+	// Customer tools
+	addTool(tools.GetCustomersTool, tools.GetCustomersHandler(linearClient))
+	addTool(tools.GetCustomerTool, tools.GetCustomerHandler(linearClient))
+	addTool(tools.GetCustomerTiersTool, tools.GetCustomerTiersHandler(linearClient))
+	addTool(tools.SetCustomerTierTool, tools.SetCustomerTierHandler(linearClient))
+	addTool(tools.SetCustomerStatusTool, tools.SetCustomerStatusHandler(linearClient))
+	addTool(tools.SetCustomerExternalIdTool, tools.SetCustomerExternalIdHandler(linearClient))
+	addTool(tools.RemoveCustomerExternalIdTool, tools.RemoveCustomerExternalIdHandler(linearClient))
 }

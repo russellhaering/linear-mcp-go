@@ -218,6 +218,7 @@ type CreateIssueInput struct {
 	ParentID    *string  `json:"parentId,omitempty"`
 	LabelIDs    []string `json:"labelIds,omitempty"`
 	ProjectID   string   `json:"projectId,omitempty"`
+	AssigneeID  string   `json:"assigneeId,omitempty"`
 }
 
 // UpdateIssueInput represents input for updating an issue
@@ -230,6 +231,7 @@ type UpdateIssueInput struct {
 	TeamID      string `json:"teamId,omitempty"`
 	ProjectID   string `json:"projectId,omitempty"`
 	MilestoneID string `json:"milestoneId,omitempty"`
+	AssigneeID  string `json:"assigneeId,omitempty"`
 }
 
 // SearchIssuesInput represents input for searching issues
@@ -325,6 +327,52 @@ type InitiativeUpdateInput struct {
 type GetProjectsInput struct {
 	TeamID string `json:"teamId,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
+}
+
+// Customer represents a Linear customer
+type Customer struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	SlugID      string          `json:"slugId"`
+	LogoURL     string          `json:"logoUrl,omitempty"`
+	Domains     []string        `json:"domains,omitempty"`
+	ExternalIds []string        `json:"externalIds,omitempty"`
+	Revenue     *int            `json:"revenue,omitempty"`
+	Size        *float64        `json:"size,omitempty"`
+	Tier        *CustomerTier   `json:"tier,omitempty"`
+	Status      *CustomerStatus `json:"status,omitempty"`
+	Owner       *User           `json:"owner,omitempty"`
+	URL         string          `json:"url"`
+}
+
+// CustomerTier represents a Linear customer tier
+type CustomerTier struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	Description string `json:"description,omitempty"`
+	Color       string `json:"color"`
+	Position    float64 `json:"position"`
+}
+
+// CustomerStatus represents a Linear customer status
+type CustomerStatus struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	Description string `json:"description,omitempty"`
+	Color       string `json:"color"`
+	Position    float64 `json:"position"`
+}
+
+// CustomerConnection represents a connection of customers
+type CustomerConnection struct {
+	Nodes []Customer `json:"nodes"`
+}
+
+// CustomerTierConnection represents a connection of customer tiers
+type CustomerTierConnection struct {
+	Nodes []CustomerTier `json:"nodes"`
 }
 
 // GraphQLRequest represents a GraphQL request

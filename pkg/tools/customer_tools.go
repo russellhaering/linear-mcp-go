@@ -82,6 +82,10 @@ func GetCustomerHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 			resultText.WriteString(fmt.Sprintf("Domains: %s\n", strings.Join(customer.Domains, ", ")))
 		}
 
+		if len(customer.ExternalIds) > 0 {
+			resultText.WriteString(fmt.Sprintf("External IDs: %s\n", strings.Join(customer.ExternalIds, ", ")))
+		}
+
 		if customer.Tier != nil {
 			resultText.WriteString(fmt.Sprintf("Tier: %s\n", customer.Tier.DisplayName))
 		} else {
@@ -249,6 +253,159 @@ func SetCustomerStatusHandler(linearClient *linear.LinearClient) func(ctx contex
 		resultText.WriteString(fmt.Sprintf("Updated customer '%s'\n", updatedCustomer.Name))
 		if updatedCustomer.Status != nil {
 			resultText.WriteString(fmt.Sprintf("New status: %s\n", updatedCustomer.Status.DisplayName))
+		}
+		resultText.WriteString(fmt.Sprintf("URL: %s\n", updatedCustomer.URL))
+
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: resultText.String()}}}, nil
+	}
+}
+
+// SetCustomerExternalIdTool is the tool definition for setting a customer's external ID
+var SetCustomerExternalIdTool = mcp.NewTool("linear_set_customer_external_id",
+	mcp.WithDescription("Sets or updates external system IDs for a customer in Linear. Use this to link customers to external systems like Salesforce, HubSpot, etc. The customer can be identified by UUID, exact name (case-insensitive), domain, or partial name match."),
+	mcp.WithString("customer", mcp.Required(), mcp.Description("Customer identifier: UUID, name (exact or partial match, case-insensitive), or domain")),
+	mcp.WithString("external_id", mcp.Required(), mcp.Description("The external system ID (e.g., Salesforce Account ID)")),
+	mcp.WithString("source", mcp.Description("Optional source identifier (e.g., 'salesforce', 'hubspot'). If provided, formats as '{source}:{external_id}'")),
+	mcp.WithBoolean("replace", mcp.Description("If true, replaces all existing external IDs. If false (default), appends to existing list")),
+)
+
+// SetCustomerExternalIdHandler handles the linear_set_customer_external_id tool
+func SetCustomerExternalIdHandler(linearClient *linear.LinearClient) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		customerIdentifier, err := request.RequireString("customer")
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: err.Error()}}}, nil
+		}
+
+		externalId, err := request.RequireString("external_id")
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: err.Error()}}}, nil
+		}
+
+		source := request.GetString("source", "")
+		replace := request.GetBool("replace", false)
+
+		// Resolve customer identifier to get current customer data
+		customer, err := linearClient.GetCustomer(customerIdentifier)
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to find customer: %v", err)}}}, nil
+		}
+
+		// Format the external ID with source prefix if provided
+		formattedId := externalId
+		if source != "" {
+			formattedId = fmt.Sprintf("%s:%s", source, externalId)
+		}
+
+		// Build the new external IDs list
+		var newExternalIds []string
+		if replace {
+			// Replace mode: only use the new ID
+			newExternalIds = []string{formattedId}
+		} else {
+			// Append mode: add to existing IDs, avoiding duplicates
+			newExternalIds = customer.ExternalIds
+			// Check if this ID already exists
+			found := false
+			for _, id := range newExternalIds {
+				if id == formattedId {
+					found = true
+					break
+				}
+			}
+			if !found {
+				newExternalIds = append(newExternalIds, formattedId)
+			}
+		}
+
+		// Update the customer
+		updatedCustomer, err := linearClient.UpdateCustomerExternalIds(customer.ID, newExternalIds)
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to update customer external IDs: %v", err)}}}, nil
+		}
+
+		// Build result text
+		var resultText strings.Builder
+		resultText.WriteString(fmt.Sprintf("Updated customer '%s'\n", updatedCustomer.Name))
+		if len(updatedCustomer.ExternalIds) > 0 {
+			resultText.WriteString(fmt.Sprintf("External IDs: %v\n", updatedCustomer.ExternalIds))
+		} else {
+			resultText.WriteString("External IDs: (none)\n")
+		}
+		resultText.WriteString(fmt.Sprintf("URL: %s\n", updatedCustomer.URL))
+
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: resultText.String()}}}, nil
+	}
+}
+
+// RemoveCustomerExternalIdTool is the tool definition for removing a customer's external ID
+var RemoveCustomerExternalIdTool = mcp.NewTool("linear_remove_customer_external_id",
+	mcp.WithDescription("Removes external system IDs from a customer in Linear. Can remove a specific ID, all IDs from a source, or all external IDs."),
+	mcp.WithString("customer", mcp.Required(), mcp.Description("Customer identifier: UUID, name (exact or partial match, case-insensitive), or domain")),
+	mcp.WithString("external_id", mcp.Description("Specific external ID to remove. If omitted, uses 'source' or removes all")),
+	mcp.WithString("source", mcp.Description("Remove all IDs from this source (e.g., 'salesforce'). Ignored if 'external_id' is provided")),
+)
+
+// RemoveCustomerExternalIdHandler handles the linear_remove_customer_external_id tool
+func RemoveCustomerExternalIdHandler(linearClient *linear.LinearClient) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		customerIdentifier, err := request.RequireString("customer")
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: err.Error()}}}, nil
+		}
+
+		externalId := request.GetString("external_id", "")
+		source := request.GetString("source", "")
+
+		// Resolve customer identifier to get current customer data
+		customer, err := linearClient.GetCustomer(customerIdentifier)
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to find customer: %v", err)}}}, nil
+		}
+
+		// Build the new external IDs list
+		var newExternalIds []string
+		removedCount := 0
+
+		if externalId != "" {
+			// Remove specific ID
+			for _, id := range customer.ExternalIds {
+				if id != externalId {
+					newExternalIds = append(newExternalIds, id)
+				} else {
+					removedCount++
+				}
+			}
+		} else if source != "" {
+			// Remove all IDs from the specified source
+			sourcePrefix := source + ":"
+			for _, id := range customer.ExternalIds {
+				if !strings.HasPrefix(id, sourcePrefix) {
+					newExternalIds = append(newExternalIds, id)
+				} else {
+					removedCount++
+				}
+			}
+		} else {
+			// Remove all external IDs
+			removedCount = len(customer.ExternalIds)
+			newExternalIds = []string{}
+		}
+
+		// Update the customer
+		updatedCustomer, err := linearClient.UpdateCustomerExternalIds(customer.ID, newExternalIds)
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to update customer external IDs: %v", err)}}}, nil
+		}
+
+		// Build result text
+		var resultText strings.Builder
+		resultText.WriteString(fmt.Sprintf("Updated customer '%s'\n", updatedCustomer.Name))
+		resultText.WriteString(fmt.Sprintf("Removed %d external ID(s)\n", removedCount))
+		if len(updatedCustomer.ExternalIds) > 0 {
+			resultText.WriteString(fmt.Sprintf("Remaining External IDs: %v\n", updatedCustomer.ExternalIds))
+		} else {
+			resultText.WriteString("Remaining External IDs: (none)\n")
 		}
 		resultText.WriteString(fmt.Sprintf("URL: %s\n", updatedCustomer.URL))
 
