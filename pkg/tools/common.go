@@ -113,6 +113,43 @@ func resolveLabelIdentifiers(linearClient *linear.LinearClient, teamID string, l
 	return labelUUIDs, nil
 }
 
+// resolveStatusIdentifier resolves a status identifier (UUID or name) to a state ID
+func resolveStatusIdentifier(linearClient *linear.LinearClient, teamID string, identifier string) (string, error) {
+	// If it's a valid UUID, use it directly
+	if isValidUUID(identifier) {
+		return identifier, nil
+	}
+
+	// Otherwise, try to find a workflow state by name
+	states, err := linearClient.GetTeamWorkflowStates(teamID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get workflow states: %v", err)
+	}
+
+	// First try exact match on name
+	for _, state := range states {
+		if state.Name == identifier {
+			return state.ID, nil
+		}
+	}
+
+	// If no exact match, try case-insensitive match
+	identifierLower := strings.ToLower(identifier)
+	for _, state := range states {
+		if strings.ToLower(state.Name) == identifierLower {
+			return state.ID, nil
+		}
+	}
+
+	// Build a list of available state names for the error message
+	var stateNames []string
+	for _, state := range states {
+		stateNames = append(stateNames, state.Name)
+	}
+
+	return "", fmt.Errorf("no workflow state found with name '%s' (available: %s)", identifier, strings.Join(stateNames, ", "))
+}
+
 // isValidUUID checks if a string is a valid UUID
 func isValidUUID(uuidStr string) bool {
 	return uuid.Validate(uuidStr) == nil
@@ -206,4 +243,20 @@ func resolveProjectIdentifier(linearClient *linear.LinearClient, identifier stri
 	}
 
 	return project.ID, nil
+}
+
+// resolveMilestoneIdentifier resolves a milestone identifier (UUID or name) to a milestone ID
+func resolveMilestoneIdentifier(linearClient *linear.LinearClient, identifier string) (string, error) {
+	// If it's a valid UUID, use it directly
+	if isValidUUID(identifier) {
+		return identifier, nil
+	}
+
+	// Otherwise, try to get the milestone by name
+	milestone, err := linearClient.GetMilestone(identifier)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve milestone identifier '%s': %v", identifier, err)
+	}
+
+	return milestone.ID, nil
 }

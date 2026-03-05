@@ -55,7 +55,14 @@ func CreateIssueHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 			priority = &p
 		}
 
-		status := request.GetString("status", "")
+		// Resolve status identifier to a state ID
+		var stateID string
+		if statusStr := request.GetString("status", ""); statusStr != "" {
+			stateID, err = resolveStatusIdentifier(linearClient, teamId, statusStr)
+			if err != nil {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve status: %v", err)}}}, nil
+			}
+		}
 
 		// Extract makeSubissueOf parameter and resolve it if needed
 		var parentID *string
@@ -115,7 +122,7 @@ func CreateIssueHandler(linearClient *linear.LinearClient) func(ctx context.Cont
 			TeamID:      teamId,
 			Description: description,
 			Priority:    priority,
-			Status:      status,
+			Status:      stateID,
 			ParentID:    parentID,
 			LabelIDs:    labelIDs,
 			ProjectID:   projectID,

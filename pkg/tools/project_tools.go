@@ -69,7 +69,7 @@ var CreateProjectTool = mcp.NewTool("linear_create_project",
 	mcp.WithString("name", mcp.Required(), mcp.Description("The name of the project.")),
 	mcp.WithString("teamIds", mcp.Required(), mcp.Description("A comma-separated list of team IDs.")),
 	mcp.WithString("description", mcp.Description("The description of the project.")),
-	mcp.WithString("leadId", mcp.Description("The ID of the project lead.")),
+	mcp.WithString("leadId", mcp.Description("The project lead (UUID, name, or email).")),
 	mcp.WithString("startDate", mcp.Description("The start date of the project (YYYY-MM-DD).")),
 	mcp.WithString("targetDate", mcp.Description("The target date of the project (YYYY-MM-DD).")),
 )
@@ -85,12 +85,32 @@ func CreateProjectHandler(linearClient *linear.LinearClient) func(ctx context.Co
 		if err != nil {
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: err.Error()}}}, nil
 		}
-		teamIDs := strings.Split(teamIDsStr, ",")
+		// Resolve each team identifier
+		var teamIDs []string
+		for _, t := range strings.Split(teamIDsStr, ",") {
+			t = strings.TrimSpace(t)
+			if t == "" {
+				continue
+			}
+			resolvedID, err := resolveTeamIdentifier(linearClient, t)
+			if err != nil {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve team: %v", err)}}}, nil
+			}
+			teamIDs = append(teamIDs, resolvedID)
+		}
 
 		description := request.GetString("description", "")
-		leadID := request.GetString("leadId", "")
 		startDate := request.GetString("startDate", "")
 		targetDate := request.GetString("targetDate", "")
+
+		// Resolve lead identifier to a user ID
+		var leadID string
+		if leadStr := request.GetString("leadId", ""); leadStr != "" {
+			leadID, err = resolveUserIdentifier(linearClient, leadStr)
+			if err != nil {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve lead: %v", err)}}}, nil
+			}
+		}
 
 		input := linear.ProjectCreateInput{
 			Name:        name,
@@ -117,7 +137,7 @@ var UpdateProjectTool = mcp.NewTool("linear_update_project",
 	mcp.WithString("project", mcp.Required(), mcp.Description("The identifier of the project to update.")),
 	mcp.WithString("name", mcp.Description("The new name of the project.")),
 	mcp.WithString("description", mcp.Description("The new description of the project.")),
-	mcp.WithString("leadId", mcp.Description("The ID of the project lead.")),
+	mcp.WithString("leadId", mcp.Description("The project lead (UUID, name, or email).")),
 	mcp.WithString("startDate", mcp.Description("The start date of the project (YYYY-MM-DD).")),
 	mcp.WithString("targetDate", mcp.Description("The target date of the project (YYYY-MM-DD).")),
 	mcp.WithString("teamIds", mcp.Description("A comma-separated list of team IDs.")),
@@ -138,13 +158,32 @@ func UpdateProjectHandler(linearClient *linear.LinearClient) func(ctx context.Co
 
 		name := request.GetString("name", "")
 		description := request.GetString("description", "")
-		leadID := request.GetString("leadId", "")
 		startDate := request.GetString("startDate", "")
 		targetDate := request.GetString("targetDate", "")
-		teamIDsStr := request.GetString("teamIds", "")
+
+		// Resolve lead identifier to a user ID
+		var leadID string
+		if leadStr := request.GetString("leadId", ""); leadStr != "" {
+			leadID, err = resolveUserIdentifier(linearClient, leadStr)
+			if err != nil {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve lead: %v", err)}}}, nil
+			}
+		}
+
+		// Resolve each team identifier
 		var teamIDs []string
-		if teamIDsStr != "" {
-			teamIDs = strings.Split(teamIDsStr, ",")
+		if teamIDsStr := request.GetString("teamIds", ""); teamIDsStr != "" {
+			for _, t := range strings.Split(teamIDsStr, ",") {
+				t = strings.TrimSpace(t)
+				if t == "" {
+					continue
+				}
+				resolvedID, err := resolveTeamIdentifier(linearClient, t)
+				if err != nil {
+					return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve team: %v", err)}}}, nil
+				}
+				teamIDs = append(teamIDs, resolvedID)
+			}
 		}
 
 		input := linear.ProjectUpdateInput{

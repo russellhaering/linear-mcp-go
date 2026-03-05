@@ -2171,6 +2171,64 @@ func (c *LinearClient) GetCommentByHash(hash string) (*Comment, error) {
 	return &comment, nil
 }
 
+// GetTeamWorkflowStates gets the workflow states for a team
+func (c *LinearClient) GetTeamWorkflowStates(teamID string) ([]State, error) {
+	query := `
+		query GetTeamStates($teamId: String!) {
+			team(id: $teamId) {
+				states {
+					nodes {
+						id
+						name
+					}
+				}
+			}
+		}
+	`
+
+	variables := map[string]interface{}{
+		"teamId": teamID,
+	}
+
+	resp, err := c.executeGraphQL(query, variables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team workflow states: %w", err)
+	}
+
+	if len(resp.Errors) > 0 {
+		return nil, fmt.Errorf("GraphQL error: %s", resp.Errors[0].Message)
+	}
+
+	teamData, ok := resp.Data["team"].(map[string]interface{})
+	if !ok || teamData == nil {
+		return nil, fmt.Errorf("team %s not found", teamID)
+	}
+
+	statesData, ok := teamData["states"].(map[string]interface{})
+	if !ok || statesData == nil {
+		return []State{}, nil
+	}
+
+	nodesData, ok := statesData["nodes"].([]interface{})
+	if !ok || nodesData == nil {
+		return []State{}, nil
+	}
+
+	states := make([]State, 0, len(nodesData))
+	for _, nodeData := range nodesData {
+		stateData, ok := nodeData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		states = append(states, State{
+			ID:   getStringValue(stateData, "id"),
+			Name: getStringValue(stateData, "name"),
+		})
+	}
+
+	return states, nil
+}
+
 // GetTeamIssues gets issues for a team
 func (c *LinearClient) GetTeamIssues(teamID string) ([]LinearIssueResponse, error) {
 	query := `

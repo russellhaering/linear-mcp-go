@@ -93,7 +93,7 @@ func UpdateMilestoneHandler(linearClient *linear.LinearClient) func(ctx context.
 var CreateMilestoneTool = mcp.NewTool("linear_create_milestone",
 	mcp.WithDescription("Create a new project milestone."),
 	mcp.WithString("name", mcp.Required(), mcp.Description("The name of the milestone.")),
-	mcp.WithString("projectId", mcp.Required(), mcp.Description("The ID of the project to create the milestone in.")),
+	mcp.WithString("projectId", mcp.Required(), mcp.Description("The project to create the milestone in (UUID, name, or slug).")),
 	mcp.WithString("description", mcp.Description("The description of the milestone.")),
 	mcp.WithString("targetDate", mcp.Description("The target date of the milestone (YYYY-MM-DD).")),
 )
@@ -105,9 +105,15 @@ func CreateMilestoneHandler(linearClient *linear.LinearClient) func(ctx context.
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: err.Error()}}}, nil
 		}
 
-		projectID, err := request.RequireString("projectId")
+		projectIdentifier, err := request.RequireString("projectId")
 		if err != nil {
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: err.Error()}}}, nil
+		}
+
+		// Resolve project identifier to a project ID
+		projectID, err := resolveProjectIdentifier(linearClient, projectIdentifier)
+		if err != nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Failed to resolve project: %v", err)}}}, nil
 		}
 
 		description := request.GetString("description", "")
